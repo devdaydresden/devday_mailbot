@@ -1,0 +1,6 @@
+*.pem
+*.txt
+.gitignore
+/.git/
+/.idea/
+/.venv/

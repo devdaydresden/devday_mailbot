@@ -1,3 +1,21 @@
+FROM debian:bookworm-slim AS builder
+
+RUN set -ex ; \
+  export DEBIAN_FRONTEND=non-interactive ; \
+  apt-get update && \
+  apt-get install -yy \
+    pipx \
+    python3-dev && \
+  pipx install uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock /app/
+
+ENV PATH=/root/.local/bin:$PATH
+
+RUN uv venv && uv sync
+
 FROM debian:bookworm-slim
 
 RUN set -ex ; \
@@ -13,14 +31,16 @@ RUN set -ex ; \
     /var/log/apt/* \
     /var/log/dpkg.log
 
+WORKDIR /app
+
+COPY --from=builder /app/.venv/ /app/.venv/
+
 RUN set -ex ; \
   addgroup --gid 1000 ddmbot && \
   adduser --disabled-login --uid 1000 --gid 1000 ddmbot
 
-COPY devday_mailbot.py /devday_mailbot
-
-RUN chmod 0755 devday_mailbot
+COPY --chmod=0644 devday_mailbot.py /app/devday_mailbot.py
 
 USER ddmbot
 
-ENTRYPOINT ["tini", "/devday_mailbot"]
+ENTRYPOINT ["tini", "/app/.venv/bin/python3", "/app/devday_mailbot.py"]

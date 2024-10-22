@@ -1,0 +1,53 @@
+---
+services:
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    restart: unless-stopped
+    volumes:
+      - mailpit_data:/data
+      - ./mailpit+2.pem:/tls/mailpit.pem:ro
+      - ./mailpit+2-key.pem:/tls/mailpit-key.pem:ro
+    ports:
+      - 127.0.0.1:8025:8025
+      - 127.0.0.1:1025:1025
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_TLS_CERT: /tls/mailpit.pem
+      MP_SMTP_TLS_KEY: /tls/mailpit-key.pem
+      MP_SMTP_REQUIRE_STARTTLS: true
+
+  testimap:
+    image: dovecot/dovecot
+    container_name: testimap
+    volumes:
+      - dovecot_data:/srv/mail
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:1143:143
+
+  mailbot:
+    image: devday_mailbot:latest
+    build: .
+    container_name: mailbot
+    depends_on:
+      - mailpit
+      - testimap
+    environment:
+      MAILBOT_IMAP_HOST: testimap
+      MAILBOT_IMAP_PORT: 143
+      MAILBOT_IMAP_USER: mailbot
+      MAILBOT_IMAP_PASSWORD: pass
+      MAILBOT_SMTP_HOST: mailpit
+      MAILBOT_SMTP_PORT: 1025
+      MAILBOT_SMTP_USER: mailbot
+      MAILBOT_SMTP_PASSWORD: cughohh5Xo3iethooth1kaicu0ahshah
+      MAILBOT_SENDER_ADDRESS: "Mailbot <info@example.org"
+      MAILBOT_ADDRESS_SOURCE: file:///addresses.txt
+    volumes:
+      - ./addresses.txt:/addresses.txt:ro
+
+volumes:
+  mailpit_data:
+  dovecot_data:
