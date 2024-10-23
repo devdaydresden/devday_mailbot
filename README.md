@@ -9,6 +9,8 @@ docker build --tag devday-mailbot:latest .
 docker run -it --rm \
    -v $(pwd)/addresses.txt:/addresses.txt:ro \
    -e MAILBOT_ADDRESS_SOURCE=<uri_of_address_source> \
+   -e MAILBOT_DEFAULT_REPLY_TO=<reply_to_address> \
+   -e MAILBOT_DEFAULT_TO=<to_address> \
    -e MAILBOT_IMAP_HOST=<imap_server_address> \
    -e MAILBOT_IMAP_PASSWORD=<imap_password> \
    -e MAILBOT_IMAP_PORT=<imap_server_port> \

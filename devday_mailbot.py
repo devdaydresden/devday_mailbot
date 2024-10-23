@@ -88,11 +88,13 @@ def determine_address_source(src_url: str) -> AddressSource:
 
 
 def process_mail(
-    smtp_conn: SMTP,
-    address_source: AddressSource,
-    sender_address: str,
-    valid_sender_patterns: list[str],
-    mail: bytes,
+        smtp_conn: SMTP,
+        address_source: AddressSource,
+        sender_address: str,
+        default_to: str,
+        default_reply_to: str,
+        valid_sender_patterns: list[str],
+        mail: bytes,
 ):
     email_parser = BytesParser()
     mail_data = email_parser.parsebytes(mail)
@@ -122,11 +124,14 @@ def process_mail(
     new_message = EmailMessage()
     new_message.add_header("Subject", mail_data.get("Subject"))
     new_message.add_header("From", sender_address)
+    new_message.add_header("To", default_to)
     new_message.add_header("Date", mail_data.get("Date"))
     new_message.add_header("Content-Type", mail_data.get_content_type())
     if "Reply-To" in mail_data:
         logging.debug("set reply-to address to %s", mail_data.get("Reply-To"))
         new_message.add_header("Reply-To", mail_data.get("Reply-To"))
+    else:
+        new_message.add_header("Reply-To", default_reply_to)
     new_message.set_payload(mail_data.get_payload())
     new_message["Message-Id"] = make_msgid(domain=sender_domain)
 
@@ -162,6 +167,8 @@ def main():
 
     sender_address = os.getenv("MAILBOT_SENDER_ADDRESS", "Mailbot <info@example.org")
     address_source_url = os.getenv("MAILBOT_ADDRESS_SOURCE")
+    default_to = os.getenv("MAILBOT_DEFAULT_TO")
+    default_reply_to = os.getenv("MAILBOT_DEFAULT_REPLY_TO")
     valid_sender_patterns = os.getenv("MAILBOT_VALID_SENDER_PATTERNS").split(",")
     address_source = determine_address_source(address_source_url)
 
@@ -195,6 +202,8 @@ def main():
                 smtp_conn,
                 address_source,
                 sender_address,
+                default_to,
+                default_reply_to,
                 valid_sender_patterns,
                 mail,
             )
