@@ -8,16 +8,19 @@ A small bot to fetch mails from an IMAP mailbox and resend them to a list of rec
 docker build --tag devday-mailbot:latest .
 docker run -it --rm \
    -v $(pwd)/addresses.txt:/addresses.txt:ro \
+   -e MAILBOT_ADDRESS_SOURCE=<uri_of_address_source> \
    -e MAILBOT_IMAP_HOST=<imap_server_address> \
+   -e MAILBOT_IMAP_PASSWORD=<imap_password> \
    -e MAILBOT_IMAP_PORT=<imap_server_port> \
    -e MAILBOT_IMAP_USER=<imap_user> \
-   -e MAILBOT_IMAP_PASSWORD=<imap_password> \
+   -e MAILBOT_LOG_LEVEL=<log_level_name> \
+   -e MAILBOT_SENDER_ADDRESS=<name_and_email_address_of_mailbot> \
    -e MAILBOT_SMTP_HOST=<smtp_server_address> \
+   -e MAILBOT_SMTP_PASSWORD=<smtp_server_password> \
    -e MAILBOT_SMTP_PORT=<smtp_server_port> \
    -e MAILBOT_SMTP_USER=<smtp_user> \
-   -e MAILBOT_SMTP_PASSWORD=<smtp_server_password> \
-   -e MAILBOT_SENDER_ADDRESS=<name_and_email_address_of_mailbot> \
-   -e MAILBOT_ADDRESS_SOURCE=<uri_of_address_source>
+   -e MAILBOT_VALID_SENDER_PATTERNS=<comma_separated_list_of_valid_sender_patterns> \
+   devday-mailbot:latest
 ```
 
 ## Address sources

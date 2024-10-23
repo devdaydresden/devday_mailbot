@@ -14,19 +14,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+import logging
 import os
+import re
 from email.message import EmailMessage
 from email.parser import BytesParser
+from email.utils import make_msgid, parseaddr
 from imaplib import IMAP4, IMAP4_SSL
 from smtplib import SMTP
-from typing import Iterable
 from urllib.parse import urlparse
 
 from requests import get
 
 
-def fetch_latest_mails(imap_conn: IMAP4) -> Iterable[bytes]:
+def fetch_latest_mails(imap_conn: IMAP4) -> list[bytes]:
     imap_conn.select()
     typ, data = imap_conn.search(None, "NOT SEEN")
     if typ != "OK":
@@ -87,10 +88,36 @@ def determine_address_source(src_url: str) -> AddressSource:
 
 
 def process_mail(
-    smtp_conn: SMTP, address_source: AddressSource, sender_address: str, mail: bytes
+    smtp_conn: SMTP,
+    address_source: AddressSource,
+    sender_address: str,
+    valid_sender_patterns: list[str],
+    mail: bytes,
 ):
     email_parser = BytesParser()
     mail_data = email_parser.parsebytes(mail)
+
+    if "From" not in mail_data:
+        return
+
+    from_address = mail_data.get("From")
+    _, from_email = parseaddr(from_address)
+
+    for pattern in valid_sender_patterns:
+        if re.match(pattern, from_email):
+            logging.info(
+                "mail From address value '%s' matched valid recipient pattern",
+                from_email,
+            )
+
+            break
+    else:
+        logging.warning("skipping mail from invalid from address %s", from_email)
+
+        return
+
+    _, sender_email = parseaddr(sender_address)
+    sender_domain = sender_email.split("@")[1]
 
     new_message = EmailMessage()
     new_message.add_header("Subject", mail_data.get("Subject"))
@@ -98,13 +125,31 @@ def process_mail(
     new_message.add_header("Date", mail_data.get("Date"))
     new_message.add_header("Content-Type", mail_data.get_content_type())
     if "Reply-To" in mail_data:
+        logging.debug("set reply-to address to %s", mail_data.get("Reply-To"))
         new_message.add_header("Reply-To", mail_data.get("Reply-To"))
     new_message.set_payload(mail_data.get_payload())
+    new_message["Message-Id"] = make_msgid(domain=sender_domain)
 
-    smtp_conn.send_message(new_message, sender_address, address_source.get_addresses())
+    recipient_addresses = address_source.get_addresses()
+
+    logging.info(
+        "distributing mail with subject '%s' and message id %s to %d recipients",
+        new_message.get("Subject"),
+        new_message.get("Message-Id"),
+        len(recipient_addresses),
+    )
+
+    smtp_conn.send_message(new_message, sender_address, recipient_addresses)
 
 
 def main():
+    logging.basicConfig(
+        level=logging.getLevelNamesMapping().get(
+            os.getenv("MAILBOT_LOG_LEVEL", "INFO")
+        ),
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
     imap_host = os.getenv("MAILBOT_IMAP_HOST", "localhost")
     imap_port = int(os.getenv("MAILBOT_IMAP_PORT", "143"))
     imap_user = os.getenv("MAILBOT_IMAP_USER")
@@ -117,26 +162,40 @@ def main():
 
     sender_address = os.getenv("MAILBOT_SENDER_ADDRESS", "Mailbot <info@example.org")
     address_source_url = os.getenv("MAILBOT_ADDRESS_SOURCE")
+    valid_sender_patterns = os.getenv("MAILBOT_VALID_SENDER_PATTERNS").split(",")
     address_source = determine_address_source(address_source_url)
+
+    logging.info("devday_mailbot started")
 
     with IMAP4_SSL(imap_host, imap_port) as imap_conn:
         try:
             imap_conn.login(imap_user, imap_password)
+            logging.debug("successfully logged in to IMAP server")
             mails = fetch_latest_mails(imap_conn)
         finally:
             imap_conn.close()
             imap_conn.logout()
+
+    if not mails:
+        logging.info("no mails to distribute")
+
+        return
+
+    logging.info("fetched %d mail(s) from IMAP mailbox", len(mails))
 
     with SMTP(smtp_host, smtp_port) as smtp_conn:
         smtp_conn.ehlo_or_helo_if_needed()
         smtp_conn.starttls()
         smtp_conn.login(smtp_user, smtp_password)
 
+        logging.debug("successfully logged in to SMTP server")
+
         for mail in mails:
             process_mail(
                 smtp_conn,
                 address_source,
                 sender_address,
+                valid_sender_patterns,
                 mail,
             )
 
