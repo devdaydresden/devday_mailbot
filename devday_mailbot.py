@@ -17,6 +17,7 @@
 import logging
 import os
 import re
+from email.header import decode_header
 from email.message import EmailMessage
 from email.parser import BytesParser
 from email.utils import make_msgid, parseaddr
@@ -88,13 +89,13 @@ def determine_address_source(src_url: str) -> AddressSource:
 
 
 def process_mail(
-        smtp_conn: SMTP,
-        address_source: AddressSource,
-        sender_address: str,
-        default_to: str,
-        default_reply_to: str,
-        valid_sender_patterns: list[str],
-        mail: bytes,
+    smtp_conn: SMTP,
+    address_source: AddressSource,
+    sender_address: str,
+    default_to: str,
+    default_reply_to: str,
+    valid_sender_patterns: list[str],
+    mail: bytes,
 ):
     email_parser = BytesParser()
     mail_data = email_parser.parsebytes(mail)
@@ -122,16 +123,25 @@ def process_mail(
     sender_domain = sender_email.split("@")[1]
 
     new_message = EmailMessage()
-    new_message.add_header("Subject", mail_data.get("Subject"))
+
+    for h in ("Subject", "Date", "Reply-To"):
+        if h in mail_data:
+            original_header = decode_header(mail_data.get(h))
+            for value, encoding in original_header:
+                if encoding is None:
+                    new_message.add_header(h, value)
+                else:
+                    new_message.add_header(h, value.decode(encoding))
+
     new_message.add_header("From", sender_address)
     new_message.add_header("To", default_to)
-    new_message.add_header("Date", mail_data.get("Date"))
     new_message.add_header("Content-Type", mail_data.get_content_type())
+
     if "Reply-To" in mail_data:
         logging.debug("set reply-to address to %s", mail_data.get("Reply-To"))
-        new_message.add_header("Reply-To", mail_data.get("Reply-To"))
     else:
         new_message.add_header("Reply-To", default_reply_to)
+
     new_message.set_payload(mail_data.get_payload())
     new_message["Message-Id"] = make_msgid(domain=sender_domain)
 
