@@ -64,16 +64,20 @@ class PretixAddressSource(AddressSource):
         self.token, self.netloc, self.organizer = token, netloc, path[1:]
 
     def get_addresses(self) -> list[str]:
-        r = get(
-            f"https://{self.netloc}/api/v1/organizers/{self.organizer}/customers/",
-            headers={"Authorization": f"Token {self.token}"},
-        )
-        r.raise_for_status()
-        return [
-            c["email"].lower()
-            for c in r.json()["results"]
-            if c["is_active"] and c["is_verified"]
-        ]
+        addresses = []
+        url = f"https://{self.netloc}/api/v1/organizers/{self.organizer}/customers/"
+        while True:
+            r = get(url, headers={"Authorization": f"Token {self.token}"})
+            r.raise_for_status()
+            addresses.extend([
+                c["email"].lower()
+                for c in r.json()["results"]
+                if c["is_active"] and c["is_verified"]
+            ])
+            if not r.json()["next"]:
+                break
+            url = r.json()["next"]
+        return addresses
 
 
 def determine_address_source(src_url: str) -> AddressSource:
@@ -89,13 +93,13 @@ def determine_address_source(src_url: str) -> AddressSource:
 
 
 def process_mail(
-    smtp_conn: SMTP,
-    address_source: AddressSource,
-    sender_address: str,
-    default_to: str,
-    default_reply_to: str,
-    valid_sender_patterns: list[str],
-    mail: bytes,
+        smtp_conn: SMTP,
+        address_source: AddressSource,
+        sender_address: str,
+        default_to: str,
+        default_reply_to: str,
+        valid_sender_patterns: list[str],
+        mail: bytes,
 ):
     email_parser = BytesParser()
     mail_data = email_parser.parsebytes(mail)
