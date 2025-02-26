@@ -69,14 +69,15 @@ class PretixAddressSource(AddressSource):
         while True:
             r = get(url, headers={"Authorization": f"Token {self.token}"})
             r.raise_for_status()
+            json_data = r.json()
             addresses.extend([
                 c["email"].lower()
-                for c in r.json()["results"]
+                for c in json_data["results"]
                 if c["is_active"] and c["is_verified"]
             ])
-            if not r.json()["next"]:
+            if not json_data["next"]:
                 break
-            url = r.json()["next"]
+            url = json_data["next"]
         return addresses
 
 
