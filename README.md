@@ -46,6 +46,16 @@ pretix://:<pretix_token>@pretix.eu/<organizer>
 
 `<organizer>` is the short name of the organizer. You can find valid organizer names at https://pretix.eu/control/organizers/.
 
+A variant of the Pretix address source that uses addresses from orders is available via the
+`pretix-orders` address scheme:
+
+Pretix orders URI Example:
+```
+pretix-orders://:<pretix_token>@pretix.eu/<organizer>
+```
+
+The `<pretix_token>` and `<organizer>` fields are the same as for the `pretix` URI scheme.
+
 ## License
 
 This program is free software: you can redistribute it and/or modify
