@@ -61,7 +61,11 @@ class FileAddressSource(AddressSource):
 
 class BasePretixAddressSource(AddressSource):
     def __init__(self, token, netloc, path):
-        self.token, self.netloc, self.organizer = token, netloc, path[1:]
+        if len(path) < 2:
+            raise ValueError("path is too short")
+        if path.count("/") < 1:
+            raise ValueError("invalid path")
+        self.token, self.netloc, self.organizer = token, netloc, path[1:].split("/")[0]
 
 
 class PretixCustomerAddressSource(BasePretixAddressSource):
@@ -84,9 +88,17 @@ class PretixCustomerAddressSource(BasePretixAddressSource):
 
 
 class PretixOrderAddressSource(BasePretixAddressSource):
+    def __init__(self, token, netloc, path):
+        if len(path) < 4:
+            raise ValueError("path is too short")
+        if path.count("/") != 2:
+            raise ValueError("invalid path")
+        super().__init__(token, netloc, path)
+        self.event = path[1:].split("/")[1]
+
     def get_addresses(self) -> list[str]:
         addresses = []
-        url = f"https://{self.netloc}/api/v1/organizers/{self.organizer}/orders/?status=p"
+        url = f"https://{self.netloc}/api/v1/organizers/{self.organizer}/events/{self.event}/orders/?status=p"
         while True:
             r = get(url, headers={"Authorization": f"Token {self.token}"})
             r.raise_for_status()

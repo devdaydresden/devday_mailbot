@@ -51,10 +51,12 @@ A variant of the Pretix address source that uses addresses from orders is availa
 
 Pretix orders URI Example:
 ```
-pretix-orders://:<pretix_token>@pretix.eu/<organizer>
+pretix-orders://:<pretix_token>@pretix.eu/<organizer>/<event>
 ```
 
 The `<pretix_token>` and `<organizer>` fields are the same as for the `pretix` URI scheme.
+
+`<event>` is the technical identifier for the event.
 
 ## License
 
