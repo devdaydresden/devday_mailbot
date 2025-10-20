@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2024 Dev Day Dresden e.V.
+# Copyright Dev Day Dresden e.V.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -59,10 +59,16 @@ class FileAddressSource(AddressSource):
             return sourcefile.readlines()
 
 
-class PretixAddressSource(AddressSource):
+class BasePretixAddressSource(AddressSource):
     def __init__(self, token, netloc, path):
-        self.token, self.netloc, self.organizer = token, netloc, path[1:]
+        if len(path) < 2:
+            raise ValueError("path is too short")
+        if path.count("/") < 1:
+            raise ValueError("invalid path")
+        self.token, self.netloc, self.organizer = token, netloc, path[1:].split("/")[0]
 
+
+class PretixCustomerAddressSource(BasePretixAddressSource):
     def get_addresses(self) -> list[str]:
         addresses = []
         url = f"https://{self.netloc}/api/v1/organizers/{self.organizer}/customers/"
@@ -81,6 +87,33 @@ class PretixAddressSource(AddressSource):
         return addresses
 
 
+class PretixOrderAddressSource(BasePretixAddressSource):
+    def __init__(self, token, netloc, path):
+        if len(path) < 4:
+            raise ValueError("path is too short")
+        if path.count("/") != 2:
+            raise ValueError("invalid path")
+        super().__init__(token, netloc, path)
+        self.event = path[1:].split("/")[1]
+
+    def get_addresses(self) -> list[str]:
+        addresses = []
+        url = f"https://{self.netloc}/api/v1/organizers/{self.organizer}/events/{self.event}/orders/?status=p"
+        while True:
+            r = get(url, headers={"Authorization": f"Token {self.token}"})
+            r.raise_for_status()
+            json_data = r.json()
+            for order in json_data["results"]:
+                for position in order["positions"]:
+                    if position["attendee_email"]:
+                        addresses.append(position["attendee_email"])
+                    addresses.append(order["email"])
+            if not json_data["next"]:
+                break
+            url = json_data["next"]
+        return list(sorted(set(addresses)))
+
+
 def determine_address_source(src_url: str) -> AddressSource:
     url = urlparse(src_url)
 
@@ -88,7 +121,10 @@ def determine_address_source(src_url: str) -> AddressSource:
         return FileAddressSource(url.path)
 
     if url.scheme == "pretix":
-        return PretixAddressSource(url.password, url.hostname, url.path)
+        return PretixCustomerAddressSource(url.password, url.hostname, url.path)
+
+    if url.scheme == "pretix-orders":
+        return PretixOrderAddressSource(url.password, url.hostname, url.path)
 
     raise ValueError(f"unsupported URL scheme {url.scheme}")
 
